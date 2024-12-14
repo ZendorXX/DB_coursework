@@ -18,7 +18,7 @@ CREATE TABLE Players (
     user_id INT NOT NULL,
     name VARCHAR(255) NOT NULL,
     allycode VARCHAR(255) NOT NULL UNIQUE,
-    galactic_power INT NOT NULL,
+    galactic_power,
     guild_id INT,
     guild_role VARCHAR(255),
     FOREIGN KEY (user_id) REFERENCES Users(user_id),
@@ -143,7 +143,18 @@ END;
 $$;
 
 
-
+CREATE OR REPLACE PROCEDURE register_user(
+    email VARCHAR(255),
+    password_hash VARCHAR(255),
+    name VARCHAR(255)
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    INSERT INTO Users (email, password_hash, name, system_role)
+    VALUES (email, password_hash, name, 'user');
+END;
+$$;
 
 
 
