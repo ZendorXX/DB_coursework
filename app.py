@@ -5,11 +5,12 @@ from utils.error_handling import handle_error
 from database.queries import (
     REGISTER_USER_QUERY, LOGIN_USER_QUERY, GET_PLAYER_BY_USER_ID_QUERY, ADD_PLAYER_QUERY,
     GET_GUILD_BY_NAME_QUERY, ADD_GUILD_QUERY, ADD_PLAYER_TO_GUILD_QUERY, ADD_PLAYER_UNIT_QUERY,
-    GET_PLAYER_UNITS_QUERY
+    GET_PLAYER_UNITS_QUERY, GET_ALL_USERS_QUERY, DELETE_USER_QUERY, DELETE_PLAYER_QUERY,
+    GET_ALL_GUILDS_QUERY, DELETE_GUILD_QUERY, GET_ALL_UNITS_QUERY, DELETE_UNIT_QUERY,
+    INSERT_UNIT_QUERY, GET_GUILD_MEMBERS_QUERY
 )
 
 import bcrypt
-
 
 # Инициализация состояния сессии
 def initialize_session_state():
@@ -130,7 +131,7 @@ def add_player_units():
     st.subheader("Добавить информацию о своих юнитах")
 
     # Получение списка всех юнитов
-    units = fetch_query(conn, "SELECT * FROM Units")
+    units = fetch_query(conn, GET_ALL_UNITS_QUERY)
     if not units:
         st.write("Юниты отсутствуют. Обратитесь к администратору.")
         return
@@ -148,7 +149,7 @@ def add_player_units():
 
     if st.button("Добавить юнит"):
         try:
-            execute_query(conn, "INSERT INTO Player_Units (player_id, unit_id, level, stars, gear_level, relic_level) VALUES (%s, %s, %s, %s, %s, %s)",
+            execute_query(conn, ADD_PLAYER_UNIT_QUERY,
                           (st.session_state.player['player_id'], selected_unit_id, level, stars, gear_level, relic_level))
             st.success(f"Юнит {selected_unit_name} успешно добавлен!")
         except Exception as e:
@@ -203,7 +204,7 @@ def units_page():
         return
 
     # Получение списка всех юнитов
-    units = fetch_query(conn, "SELECT * FROM Units")
+    units = fetch_query(conn, GET_ALL_UNITS_QUERY)
     if not units:
         st.write("Юниты отсутствуют. Обратитесь к администратору.")
         return
@@ -257,7 +258,7 @@ def manage_users():
     st.header("Управление пользователями")
 
     # Получение списка всех пользователей (кроме админов)
-    users = fetch_query(conn, "SELECT * FROM Users WHERE system_role != 'admin'")
+    users = fetch_query(conn, GET_ALL_USERS_QUERY)
 
     if users:
         st.subheader("Список пользователей")
@@ -272,7 +273,7 @@ def manage_users():
                 # Кнопка для удаления игрового аккаунта
                 if st.button(f"Удалить игровой аккаунт {player[0]['name']}"):
                     try:
-                        execute_query(conn, "DELETE FROM Players WHERE player_id = %s", (player[0]['player_id'],))
+                        execute_query(conn, DELETE_PLAYER_QUERY, (player[0]['player_id'],))
                         st.success(f"Игровой аккаунт {player[0]['name']} удалён!")
                         st.experimental_rerun()  # Перезагрузка страницы
                     except Exception as e:
@@ -281,7 +282,7 @@ def manage_users():
             # Кнопка для удаления пользователя
             if st.button(f"Удалить пользователя {user['name']}"):
                 try:
-                    execute_query(conn, "DELETE FROM Users WHERE user_id = %s", (user['user_id'],))
+                    execute_query(conn, DELETE_USER_QUERY, (user['user_id'],))
                     st.success(f"Пользователь {user['name']} удалён!")
                     st.experimental_rerun()  # Перезагрузка страницы
                 except Exception as e:
@@ -299,7 +300,7 @@ def manage_units():
 
     if st.button("Добавить юнит"):
         try:
-            execute_query(conn, "INSERT INTO Units (name, type) VALUES (%s, %s)",
+            execute_query(conn, INSERT_UNIT_QUERY,
                           (unit_name, unit_type))
             st.success(f"Юнит {unit_name} успешно добавлен!")
         except Exception as e:
@@ -307,7 +308,7 @@ def manage_units():
 
     # Отображение списка всех юнитов
     st.subheader("Список юнитов")
-    units = fetch_query(conn, "SELECT * FROM Units")
+    units = fetch_query(conn, GET_ALL_UNITS_QUERY)
     if units:
         for unit in units:
             st.write(f"ID: {unit['unit_id']}, Имя: {unit['name']}, Тип: {unit['type']}")
@@ -315,7 +316,7 @@ def manage_units():
             # Кнопка для удаления юнита
             if st.button(f"Удалить юнит {unit['name']}"):
                 try:
-                    execute_query(conn, "DELETE FROM Units WHERE unit_id = %s", (unit['unit_id'],))
+                    execute_query(conn, DELETE_UNIT_QUERY, (unit['unit_id'],))
                     st.success(f"Юнит {unit['name']} удалён!")
                     st.experimental_rerun()  # Перезагрузка страницы
                 except Exception as e:
@@ -327,7 +328,7 @@ def manage_guilds():
     st.header("Управление гильдиями")
 
     # Получение списка всех гильдий
-    guilds = fetch_query(conn, "SELECT * FROM Guilds")
+    guilds = fetch_query(conn, GET_ALL_GUILDS_QUERY)
 
     if guilds:
         st.subheader("Список гильдий")
@@ -341,7 +342,7 @@ def manage_guilds():
             # Кнопка для удаления гильдии
             if st.button(f"Удалить гильдию {guild['name']}"):
                 try:
-                    execute_query(conn, "DELETE FROM Guilds WHERE guild_id = %s", (guild['guild_id'],))
+                    execute_query(conn, DELETE_GUILD_QUERY, (guild['guild_id'],))
                     st.success(f"Гильдия {guild['name']} удалена!")
                     st.experimental_rerun()  # Перезагрузка страницы
                 except Exception as e:
@@ -353,7 +354,7 @@ def view_guild_members(guild_id):
     st.subheader("Состав гильдии")
 
     # Получение списка игроков в гильдии
-    players = fetch_query(conn, "SELECT * FROM Players WHERE guild_id = %s", (guild_id,))
+    players = fetch_query(conn, GET_GUILD_MEMBERS_QUERY, (guild_id,))
 
     if players:
         for player in players:
