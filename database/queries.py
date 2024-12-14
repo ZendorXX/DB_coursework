@@ -86,3 +86,32 @@ INSERT INTO Units (name, type) VALUES (%s, %s);
 GET_GUILD_MEMBERS_QUERY = """
 SELECT * FROM Players WHERE guild_id = %s;
 """
+
+# Запросы для работы с рейдами
+INSERT_RAID_TEMPLATE_QUERY = """
+INSERT INTO Raid_Templates (name) VALUES (%s) RETURNING raid_template_id;
+"""
+
+GET_ALL_RAID_TEMPLATES_QUERY = """
+SELECT * FROM Raid_Templates;
+"""
+
+DELETE_RAID_TEMPLATE_QUERY = """
+DELETE FROM Raid_Templates WHERE raid_template_id = %s;
+"""
+
+# Запросы для работы с персонажами рейдов
+INSERT_RAID_CHARACTER_QUERY = """
+INSERT INTO Raid_Characters (raid_template_id, unit_id) VALUES (%s, %s);
+"""
+
+GET_RAID_CHARACTERS_BY_TEMPLATE_QUERY = """
+SELECT rc.*, u.name AS unit_name
+FROM Raid_Characters rc
+JOIN Units u ON rc.unit_id = u.unit_id
+WHERE rc.raid_template_id = %s;
+"""
+
+DELETE_RAID_CHARACTER_QUERY = """
+DELETE FROM Raid_Characters WHERE raid_character_id = %s;
+"""
