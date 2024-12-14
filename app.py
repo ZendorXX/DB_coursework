@@ -4,9 +4,12 @@ from utils.db import execute_query, fetch_query
 from utils.error_handling import handle_error
 from database.queries import (
     REGISTER_USER_QUERY, LOGIN_USER_QUERY, GET_PLAYER_BY_USER_ID_QUERY, ADD_PLAYER_QUERY,
-    GET_GUILD_BY_NAME_QUERY, ADD_GUILD_QUERY, ADD_PLAYER_TO_GUILD_QUERY
+    GET_GUILD_BY_NAME_QUERY, ADD_GUILD_QUERY, ADD_PLAYER_TO_GUILD_QUERY, ADD_PLAYER_UNIT_QUERY,
+    GET_PLAYER_UNITS_QUERY
 )
+
 import bcrypt
+
 
 # Инициализация состояния сессии
 def initialize_session_state():
@@ -49,9 +52,7 @@ def home_page():
             # Если игрок не состоит в гильдии, добавляем возможность вступления
             if not st.session_state.player['guild_id']:
                 join_guild_form()
-
-            # Добавление информации о юнитах
-            add_player_units()
+                
         else:
             # Если игровой аккаунт ещё не добавлен
             add_player_account_form()
@@ -147,7 +148,7 @@ def add_player_units():
 
     if st.button("Добавить юнит"):
         try:
-            execute_query(conn, "INSERT INTO PlayerUnits (player_id, unit_id, level, stars, gear_level, relic_level) VALUES (%s, %s, %s, %s, %s, %s)",
+            execute_query(conn, "INSERT INTO Player_Units (player_id, unit_id, level, stars, gear_level, relic_level) VALUES (%s, %s, %s, %s, %s, %s)",
                           (st.session_state.player['player_id'], selected_unit_id, level, stars, gear_level, relic_level))
             st.success(f"Юнит {selected_unit_name} успешно добавлен!")
         except Exception as e:
@@ -192,6 +193,53 @@ def logout_page():
     st.session_state.user = None
     st.session_state.player = None
     st.success("Выход выполнен успешно!")
+
+def units_page():
+    st.header("Ваши юниты")
+
+    # Проверка, авторизован ли игрок
+    if not st.session_state.player:
+        st.warning("Пожалуйста, добавьте игровой аккаунт.")
+        return
+
+    # Получение списка всех юнитов
+    units = fetch_query(conn, "SELECT * FROM Units")
+    if not units:
+        st.write("Юниты отсутствуют. Обратитесь к администратору.")
+        return
+
+    # Выбор юнита для добавления
+    st.subheader("Добавить юнит")
+    unit_options = {unit['name']: unit['unit_id'] for unit in units}
+    selected_unit_name = st.selectbox("Выберите юнит", list(unit_options.keys()))
+    selected_unit_id = unit_options[selected_unit_name]
+
+    # Ввод игровой информации
+    level = st.number_input("Уровень", min_value=1, max_value=85, value=1)
+    stars = st.number_input("Количество звёзд", min_value=1, max_value=7, value=1)
+    gear_level = st.number_input("Уровень снаряжения", min_value=1, max_value=12, value=1) if units[selected_unit_id - 1]['type'] == 'character' else None
+    relic_level = st.number_input("Уровень реликвий", min_value=0, max_value=8, value=0) if units[selected_unit_id - 1]['type'] == 'character' else None
+
+    if st.button("Добавить юнит"):
+        try:
+            execute_query(conn, ADD_PLAYER_UNIT_QUERY,
+                          (st.session_state.player['player_id'], selected_unit_id, level, stars, gear_level, relic_level))
+            st.success(f"Юнит {selected_unit_name} успешно добавлен!")
+        except Exception as e:
+            handle_error(e)
+
+    # Отображение текущих юнитов игрока
+    st.subheader("Ваши юниты")
+    player_units = fetch_query(conn, GET_PLAYER_UNITS_QUERY, (st.session_state.player['player_id'],))
+    if player_units:
+        for unit in player_units:
+            st.write(f"Юнит: {unit['unit_name']} (Тип: {unit['unit_type']})")
+            if unit['unit_type'] == 'character':
+                st.write(f"Уровень: {unit['level']}, Звёзд: {unit['stars']} Снаряжение: {unit['gear_level']}, Реликвии: {unit['relic_level']}")
+            else:
+                st.write(f"Уровень: {unit['level']}, Звёзд: {unit['stars']}")
+    else:
+        st.write("У вас пока нет юнитов.")
 
 def admin_panel():
     st.title("Админ-панель")
@@ -248,7 +296,6 @@ def manage_units():
     st.subheader("Добавить новый юнит")
     unit_name = st.text_input("Имя юнита")
     unit_type = st.selectbox("Тип юнита", ["character", "ship"])
-    is_character = unit_type == "character"
 
     if st.button("Добавить юнит"):
         try:
@@ -264,6 +311,15 @@ def manage_units():
     if units:
         for unit in units:
             st.write(f"ID: {unit['unit_id']}, Имя: {unit['name']}, Тип: {unit['type']}")
+
+            # Кнопка для удаления юнита
+            if st.button(f"Удалить юнит {unit['name']}"):
+                try:
+                    execute_query(conn, "DELETE FROM Units WHERE unit_id = %s", (unit['unit_id'],))
+                    st.success(f"Юнит {unit['name']} удалён!")
+                    st.experimental_rerun()  # Перезагрузка страницы
+                except Exception as e:
+                    handle_error(e)
     else:
         st.write("Юниты отсутствуют.")
 
@@ -334,6 +390,7 @@ def admin_navigation():
 def user_navigation():
     pages = {
         "Домашняя страница": home_page,
+        "Юниты": units_page,
         "Выход": logout_page
     }
     selected_page = st.sidebar.selectbox("Навигация", list(pages.keys()))

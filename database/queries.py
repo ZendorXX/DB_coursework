@@ -33,3 +33,15 @@ UPDATE Players
 SET guild_id = %s, guild_role = %s
 WHERE user_id = %s;
 """
+
+ADD_PLAYER_UNIT_QUERY = """
+INSERT INTO Player_Units (player_id, unit_id, level, stars, gear_level, relic_level)
+VALUES (%s, %s, %s, %s, %s, %s)
+"""
+
+GET_PLAYER_UNITS_QUERY = """
+SELECT pu.*, u.name AS unit_name, u.type AS unit_type
+FROM Player_Units pu
+JOIN Units u ON pu.unit_id = u.unit_id
+WHERE pu.player_id = %s
+"""

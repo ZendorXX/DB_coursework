@@ -31,7 +31,7 @@ CREATE TABLE Units (
     type VARCHAR(255) NOT NULL
 );
 
-CREATE TABLE PlayerUnits (
+CREATE TABLE Player_Units (
     player_unit_id SERIAL PRIMARY KEY,
     player_id INT NOT NULL,
     unit_id INT NOT NULL,
@@ -88,6 +88,42 @@ BEGIN
 END;
 $$;
 
+CREATE OR REPLACE FUNCTION update_guild_members_count()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF TG_OP = 'INSERT' THEN
+        -- Увеличиваем количество участников в гильдии
+        UPDATE Guilds
+        SET members_count = members_count + 1
+        WHERE guild_id = NEW.guild_id;
+
+        -- Проверяем, что количество участников не превышает 50
+        IF (SELECT members_count FROM Guilds WHERE guild_id = NEW.guild_id) > 50 THEN
+            RAISE EXCEPTION 'Гильдия не может содержать более 50 участников.';
+        END IF;
+
+    ELSIF TG_OP = 'DELETE' THEN
+        -- Уменьшаем количество участников в гильдии
+        UPDATE Guilds
+        SET members_count = members_count - 1
+        WHERE guild_id = OLD.guild_id;
+
+        -- Проверяем, что количество участников не становится меньше 1
+        IF (SELECT members_count FROM Guilds WHERE guild_id = OLD.guild_id) < 1 THEN
+            RAISE EXCEPTION 'Гильдия не может быть пустой.';
+        END IF;
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Создаем триггер
+CREATE TRIGGER update_guild_members_count_trigger
+AFTER INSERT OR DELETE ON Players
+FOR EACH ROW
+EXECUTE FUNCTION update_guild_members_count();
+
 
 
 
@@ -96,28 +132,6 @@ CREATE VIEW PlayerGuildView AS
 SELECT p.player_id, p.name AS player_name, g.name AS guild_name, p.guild_role
 FROM Players p
 LEFT JOIN Guilds g ON p.guild_id = g.guild_id;
-
--- Триггер для автоматического обновления members_count в Guilds
-CREATE OR REPLACE FUNCTION update_guild_members_count()
-RETURNS TRIGGER AS $$
-BEGIN
-    IF TG_OP = 'INSERT' THEN
-        UPDATE Guilds
-        SET members_count = members_count + 1
-        WHERE guild_id = NEW.guild_id;
-    ELSIF TG_OP = 'DELETE' THEN
-        UPDATE Guilds
-        SET members_count = members_count - 1
-        WHERE guild_id = OLD.guild_id;
-    END IF;
-    RETURN NULL;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER guild_members_count_trigger
-AFTER INSERT OR DELETE ON Players
-FOR EACH ROW
-EXECUTE FUNCTION update_guild_members_count();
 
 -- Функция для получения общего количества очков гильдии
 CREATE OR REPLACE FUNCTION get_guild_total_score(guild_id INT)
