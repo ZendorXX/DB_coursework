@@ -27,23 +27,18 @@ CREATE TABLE Players (
 
 CREATE TABLE Units (
     unit_id SERIAL PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    level INT NOT NULL,
-    stars INT NOT NULL,
+    name VARCHAR(255) NOT NULL UNIQUE,
     type VARCHAR(255) NOT NULL
 );
 
-CREATE TABLE Character_Details (
-    unit_id INT PRIMARY KEY,
-    gear_level INT NOT NULL,
-    relic_level INT NOT NULL,
-    FOREIGN KEY (unit_id) REFERENCES Units(unit_id)
-);
-
-CREATE TABLE Player_Units (
+CREATE TABLE PlayerUnits (
     player_unit_id SERIAL PRIMARY KEY,
     player_id INT NOT NULL,
     unit_id INT NOT NULL,
+    level INT NOT NULL,
+    stars INT NOT NULL,
+    gear_level INT,
+    relic_level INT,
     FOREIGN KEY (player_id) REFERENCES Players(player_id),
     FOREIGN KEY (unit_id) REFERENCES Units(unit_id)
 );
@@ -79,6 +74,19 @@ CREATE TABLE Raid_Results (
     FOREIGN KEY (raid_id) REFERENCES Raids(raid_id),
     FOREIGN KEY (player_id) REFERENCES Players(player_id)
 );
+
+CREATE OR REPLACE PROCEDURE register_user(
+    email VARCHAR(255),
+    password_hash VARCHAR(255),
+    name VARCHAR(255)
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    INSERT INTO Users (email, password_hash, name, system_role)
+    VALUES (email, password_hash, name, 'user');
+END;
+$$;
 
 
 
@@ -139,20 +147,6 @@ AS $$
 BEGIN
     INSERT INTO Players (user_id, name, allycode, galactic_power, guild_id, guild_role)
     VALUES (user_id, name, allycode, galactic_power, guild_id, guild_role);
-END;
-$$;
-
-
-CREATE OR REPLACE PROCEDURE register_user(
-    email VARCHAR(255),
-    password_hash VARCHAR(255),
-    name VARCHAR(255)
-)
-LANGUAGE plpgsql
-AS $$
-BEGIN
-    INSERT INTO Users (email, password_hash, name, system_role)
-    VALUES (email, password_hash, name, 'user');
 END;
 $$;
 
