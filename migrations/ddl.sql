@@ -54,7 +54,7 @@ CREATE TABLE Raids (
     guild_id INT NOT NULL,
     start_time TIMESTAMP NOT NULL,
     end_time TIMESTAMP NOT NULL,
-    FOREIGN KEY (raid_template_id) REFERENCES RaidTemplates(raid_template_id),
+    FOREIGN KEY (raid_template_id) REFERENCES Raid_Templates(raid_template_id),
     FOREIGN KEY (guild_id) REFERENCES Guilds(guild_id)
 );
 
@@ -62,7 +62,7 @@ CREATE TABLE Raid_Characters (
     raid_character_id SERIAL PRIMARY KEY,
     raid_template_id INT NOT NULL,
     unit_id INT NOT NULL,
-    FOREIGN KEY (raid_template_id) REFERENCES RaidTemplates(raid_template_id),
+    FOREIGN KEY (raid_template_id) REFERENCES Raid_Templates(raid_template_id),
     FOREIGN KEY (unit_id) REFERENCES Units(unit_id)
 );
 
@@ -92,23 +92,19 @@ CREATE OR REPLACE FUNCTION update_guild_members_count()
 RETURNS TRIGGER AS $$
 BEGIN
     IF TG_OP = 'INSERT' THEN
-        -- Увеличиваем количество участников в гильдии
         UPDATE Guilds
         SET members_count = members_count + 1
         WHERE guild_id = NEW.guild_id;
 
-        -- Проверяем, что количество участников не превышает 50
         IF (SELECT members_count FROM Guilds WHERE guild_id = NEW.guild_id) > 50 THEN
             RAISE EXCEPTION 'Гильдия не может содержать более 50 участников.';
         END IF;
 
     ELSIF TG_OP = 'DELETE' THEN
-        -- Уменьшаем количество участников в гильдии
         UPDATE Guilds
         SET members_count = members_count - 1
         WHERE guild_id = OLD.guild_id;
 
-        -- Проверяем, что количество участников не становится меньше 1
         IF (SELECT members_count FROM Guilds WHERE guild_id = OLD.guild_id) < 1 THEN
             RAISE EXCEPTION 'Гильдия не может быть пустой.';
         END IF;
@@ -118,22 +114,46 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Создаем триггер
+
 CREATE TRIGGER update_guild_members_count_trigger
 AFTER INSERT OR DELETE ON Players
 FOR EACH ROW
 EXECUTE FUNCTION update_guild_members_count();
 
+CREATE OR REPLACE FUNCTION delete_player_units_before_unit_delete()
+RETURNS TRIGGER AS $$
+BEGIN
+    DELETE FROM Player_Units WHERE unit_id = OLD.unit_id;
+    RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER before_unit_delete
+BEFORE DELETE ON Units
+FOR EACH ROW
+EXECUTE FUNCTION delete_player_units_before_unit_delete();
+
+CREATE OR REPLACE FUNCTION delete_player_before_user_delete()
+RETURNS TRIGGER AS $$
+BEGIN
+    DELETE FROM Players WHERE user_id = OLD.user_id;
+    RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER before_user_delete
+BEFORE DELETE ON Users
+FOR EACH ROW
+EXECUTE FUNCTION delete_player_before_user_delete();
 
 
 
--- Представление для отображения игроков и их гильдий
 CREATE VIEW PlayerGuildView AS
 SELECT p.player_id, p.name AS player_name, g.name AS guild_name, p.guild_role
 FROM Players p
 LEFT JOIN Guilds g ON p.guild_id = g.guild_id;
 
--- Функция для получения общего количества очков гильдии
+
 CREATE OR REPLACE FUNCTION get_guild_total_score(guild_id INT)
 RETURNS INT AS $$
 DECLARE
@@ -147,7 +167,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Хранимая процедура для добавления нового игрока
 CREATE OR REPLACE PROCEDURE add_player(
     user_id INT,
     name VARCHAR(255),

@@ -1,9 +1,13 @@
 import streamlit as st
+from datetime import datetime
 
 from utils.db import execute_query, fetch_query
 from utils.error_handling import handle_error
 
-from database.queries import GET_PLAYER_BY_USER_ID_QUERY, ADD_PLAYER_QUERY, GET_GUILD_BY_NAME_QUERY, ADD_GUILD_QUERY, ADD_PLAYER_TO_GUILD_QUERY
+from database.queries import (
+    GET_PLAYER_BY_USER_ID_QUERY, ADD_PLAYER_QUERY, GET_GUILD_BY_NAME_QUERY, ADD_GUILD_QUERY, ADD_PLAYER_TO_GUILD_QUERY,
+    GET_ALL_RAID_TEMPLATES_QUERY, INSERT_RAID_QUERY, GET_RAIDS_BY_GUILD_ID_QUERY, INSERT_RAID_RESULT_QUERY
+)
 
 def home_page():
     st.header("Добро пожаловать!")
@@ -17,12 +21,13 @@ def home_page():
 
             if not st.session_state.player['guild_id']:
                 join_guild_form()
-                
+            else:
+                if st.session_state.player['guild_role'] == "Глава":
+                    add_raid_form()
         else:
             add_player_account_form()
     else:
         st.write("Пожалуйста, войдите или зарегистрируйтесь.")
-
 def get_player_info(user_id):
     conn = st.session_state.conn
 
@@ -95,3 +100,52 @@ def add_player_to_guild(guild_name, guild_role):
         guild = fetch_query(conn, GET_GUILD_BY_NAME_QUERY, (guild_name,))
 
     execute_query(conn, ADD_PLAYER_TO_GUILD_QUERY, (guild[0]['guild_id'], guild_role, st.session_state.user['user_id']))
+
+def add_raid_form():
+    conn = st.session_state.conn
+
+    st.subheader("Добавить рейд")
+
+    raid_templates = fetch_query(conn, GET_ALL_RAID_TEMPLATES_QUERY)
+    if not raid_templates:
+        st.write("Типы рейдов отсутствуют. Обратитесь к администратору.")
+        return
+
+    raid_options = {raid['name']: raid['raid_template_id'] for raid in raid_templates}
+    selected_raid_name = st.selectbox("Выберите тип рейда", list(raid_options.keys()))
+    selected_raid_id = raid_options[selected_raid_name]
+
+    start_time = st.date_input("Дата начала рейда", datetime.now())
+    end_time = st.date_input("Дата окончания рейда", datetime.now())
+
+    if st.button("Добавить рейд"):
+        try:
+            execute_query(conn, INSERT_RAID_QUERY,
+                          (selected_raid_id, st.session_state.player['guild_id'], start_time, end_time))
+            st.success(f"Рейд '{selected_raid_name}' успешно добавлен!")
+        except Exception as e:
+            handle_error(e)
+
+def add_raid_result_form():
+    conn = st.session_state.conn
+
+    st.subheader("Добавить результаты рейда")
+
+    raids = fetch_query(conn, GET_RAIDS_BY_GUILD_ID_QUERY, (st.session_state.player['guild_id'],))
+    if not raids:
+        st.write("В данный момент нет активных рейдов.")
+        return
+
+    raid_options = {raid['name']: raid['raid_id'] for raid in raids}
+    selected_raid_name = st.selectbox("Выберите рейд", list(raid_options.keys()))
+    selected_raid_id = raid_options[selected_raid_name]
+
+    score = st.number_input("Введите ваши очки", min_value=0, step=1)
+
+    if st.button("Добавить результат"):
+        try:
+            execute_query(conn, INSERT_RAID_RESULT_QUERY,
+                          (selected_raid_id, st.session_state.player['player_id'], score))
+            st.success(f"Результаты рейда '{selected_raid_name}' успешно добавлены!")
+        except Exception as e:
+            handle_error(e)

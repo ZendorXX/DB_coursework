@@ -50,6 +50,13 @@ JOIN Units u ON pu.unit_id = u.unit_id
 WHERE pu.player_id = %s;
 """
 
+UPDATE_PLAYER_UNIT_QUERY = """
+UPDATE Player_Units
+SET level = %s, stars = %s, gear_level = %s, relic_level = %s
+WHERE player_unit_id = %s;
+"""
+
+
 # Запросы для админ-панели
 GET_ALL_USERS_QUERY = """
 SELECT * FROM Users WHERE system_role != 'admin';
@@ -114,4 +121,21 @@ WHERE rc.raid_template_id = %s;
 
 DELETE_RAID_CHARACTER_QUERY = """
 DELETE FROM Raid_Characters WHERE raid_character_id = %s;
+"""
+
+INSERT_RAID_QUERY = """
+INSERT INTO Raids (raid_template_id, guild_id, start_time, end_time)
+VALUES (%s, %s, %s, %s);
+"""
+
+GET_RAIDS_BY_GUILD_ID_QUERY = """
+SELECT r.raid_id, rt.name AS raid_name
+FROM Raids r
+JOIN Raid_Templates rt ON r.raid_template_id = rt.raid_template_id
+WHERE r.guild_id = %s
+"""
+
+INSERT_RAID_RESULT_QUERY = """
+INSERT INTO Raid_Results (raid_id, player_id, score)
+VALUES (%s, %s, %s)
 """
