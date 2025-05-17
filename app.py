@@ -83,7 +83,7 @@ def main():
 
     # Запускаем Pub/Sub‑слушатель один раз только для админа
     if st.session_state.system_role == "admin" and "listener_started" not in st.session_state:
-        channels = ["player", "raid", "units"]
+        channels = ["player", "raid", "units", "guild"]
         start_listener(channels)
         st.session_state.listener_started = True
 
