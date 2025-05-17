@@ -9,6 +9,8 @@ from pages.admin import admin_panel
 from pages.raids import raids_page
 from pages.units import units_page
 
+from utils.pubsub_listener import start_listener, notifications_queue
+
 
 def initialize_session_state():
     if "user" not in st.session_state:
@@ -76,6 +78,36 @@ def main():
         else:
             for key in ['auth_token','logged_in','user_name','user_id','system_role']:
                 st.session_state.pop(key, None)
+
+    # Запускаем Pub/Sub‑слушатель один раз только для админа
+    if st.session_state.system_role == "admin" and "listener_started" not in st.session_state:
+        channels = ["player", "raid", "units"]
+        start_listener(channels)
+        st.session_state.listener_started = True
+
+    # Блок уведомлений в сайдбаре
+    if st.session_state.system_role == "admin":
+        with st.sidebar.expander("🔔 Уведомления", expanded=True):
+            if "all_msgs" not in st.session_state:
+                st.session_state.all_msgs = []
+            if "shown_count" not in st.session_state:
+                st.session_state.shown_count = 0
+
+            new_msgs = []
+            try:
+                while True:
+                    new_msgs.append(notifications_queue.get_nowait())
+            except Exception:
+                pass
+
+            if new_msgs:
+                st.session_state.all_msgs.extend(new_msgs)
+
+            for msg in st.session_state.all_msgs[st.session_state.shown_count:]:
+                chan = msg.get("channel", "")
+                mtype = msg.get("type", "unknown")
+                st.info(f"[{chan}] [{mtype}] {msg}")
+            st.session_state.shown_count = len(st.session_state.all_msgs)
 
     if st.session_state.user:
         if st.session_state.user['system_role'] == 'admin':
