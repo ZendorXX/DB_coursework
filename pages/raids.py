@@ -1,11 +1,16 @@
 import streamlit as st
 
-from utils.db import fetch_query 
+from utils.db import fetch_query, fetch_with_cache
 
-from database.queries import GET_ALL_RAID_TEMPLATES_QUERY, GET_RAID_CHARACTERS_BY_TEMPLATE_QUERY
+from database.queries import (
+    GET_ALL_RAID_TEMPLATES_QUERY,
+    GET_RAID_CHARACTERS_BY_TEMPLATE_QUERY
+)   
+from database.redis_client import get_redis
 
 def raids_page():
     conn = st.session_state.conn
+    redis_client = get_redis()
 
     st.header("Рейды")
 
@@ -13,7 +18,14 @@ def raids_page():
         st.warning("Пожалуйста, добавьте игровой аккаунт.")
         return
 
-    raid_templates = fetch_query(conn, GET_ALL_RAID_TEMPLATES_QUERY)
+    # Кешируем список типов рейдов
+    raid_templates = fetch_with_cache(
+        conn,
+        redis_client,
+        'raids:templates',
+        GET_ALL_RAID_TEMPLATES_QUERY
+    )
+
     if not raid_templates:
         st.write("Рейды отсутствуют. Обратитесь к администратору.")
         return
@@ -24,7 +36,14 @@ def raids_page():
     selected_raid_id = raid_options[selected_raid_name]
 
     st.subheader(f"Персонажи рейда: {selected_raid_name}")
-    raid_characters = fetch_query(conn, GET_RAID_CHARACTERS_BY_TEMPLATE_QUERY, (selected_raid_id,))
+    # Кешируем персонажей каждого шаблона рейда
+    raid_characters = fetch_with_cache(
+        conn,
+        redis_client,
+        f'raid:{selected_raid_id}:characters',
+        GET_RAID_CHARACTERS_BY_TEMPLATE_QUERY,
+        (selected_raid_id,)
+    )
 
     if raid_characters:
         for character in raid_characters:
