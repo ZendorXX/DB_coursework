@@ -8,6 +8,7 @@ from pages.auth import register_page, login_page, logout_page
 from pages.admin import admin_panel
 from pages.raids import raids_page
 from pages.units import units_page
+from pages.guild import guild_page
 
 from utils.pubsub_listener import start_listener, notifications_queue
 
@@ -43,6 +44,7 @@ def user_navigation():
     pages = {
         "Домашняя страница": home_page,
         "Юниты": units_page,
+        "Гильдия": guild_page,
         "Рейды": raids_page,
         "Выход": logout_page
     }

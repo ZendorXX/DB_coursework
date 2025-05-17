@@ -37,6 +37,29 @@ SET guild_id = %s, guild_role = %s
 WHERE user_id = %s;
 """
 
+ADD_GUILD_MEMBER_QUERY = """
+INSERT INTO Players (user_id, name, allycode, galactic_power, guild_id, guild_role)
+VALUES (
+    (SELECT user_id FROM Players WHERE allycode = %s),
+    (SELECT name FROM Players WHERE allycode = %s),
+    %s,
+    0,
+    %s,
+    %s
+);
+"""
+
+REMOVE_GUILD_MEMBER_QUERY = """
+DELETE FROM Players
+WHERE guild_id = %s AND allycode = %s;
+"""
+
+UPDATE_GUILD_MEMBER_ROLE_QUERY = """
+UPDATE Players
+SET guild_role = %s
+WHERE guild_id = %s AND allycode = %s;
+"""
+
 # Запросы для работы с юнитами
 ADD_PLAYER_UNIT_QUERY = """
 INSERT INTO Player_Units (player_id, unit_id, level, stars, gear_level, relic_level)
