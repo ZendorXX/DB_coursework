@@ -1,4 +1,5 @@
 import streamlit as st
+import json
 from datetime import datetime
 
 from utils.db import execute_query, fetch_query
@@ -8,6 +9,7 @@ from database.queries import (
     GET_PLAYER_BY_USER_ID_QUERY, ADD_PLAYER_QUERY, GET_GUILD_BY_NAME_QUERY, ADD_GUILD_QUERY, ADD_PLAYER_TO_GUILD_QUERY,
     GET_ALL_RAID_TEMPLATES_QUERY, INSERT_RAID_QUERY, GET_RAIDS_BY_GUILD_ID_QUERY, INSERT_RAID_RESULT_QUERY
 )
+from database.redis_client import get_redis
 
 def home_page():
     st.header("Добро пожаловать!")
@@ -28,6 +30,7 @@ def home_page():
             add_player_account_form()
     else:
         st.write("Пожалуйста, войдите или зарегистрируйтесь.")
+
 def get_player_info(user_id):
     conn = st.session_state.conn
 
@@ -70,8 +73,41 @@ def add_player_account_form():
         try:
             execute_query(conn, ADD_PLAYER_QUERY, (st.session_state.user['user_id'], player_name, allycode))
 
+            redis_client = get_redis()
+
             if in_guild and guild_name:
                 add_player_to_guild(guild_name, guild_role)
+                
+                # Pub/Sub
+                redis_client.publish(
+                    "player",
+                    json.dumps({
+                        "type": "player_with_guild",
+                        "action": "created",
+                        "player_id": st.session_state.player['player_id'],
+                        "player_name": st.session_state.player['name'],
+                        "guild_name": st.session_state.player['guild_name'],
+                        "guild_id": st.session_state.player['guild_id'],
+                        "guild_role": st.session_state.player['guild_role'],
+                        "allycode": st.session_state.player['allycode'],
+                        "user_id": st.session_state.user['user_id'],
+                        "user_name": st.session_state.user['name']
+                    })
+                )
+            else:
+                # Pub/Sub
+                redis_client.publish(
+                    "player",
+                    json.dumps({
+                        "type": "player_without_guild",
+                        "action": "created",
+                        "player_id": st.session_state.player['player_id'],
+                        "player_name": st.session_state.player['name'],
+                        "allycode": st.session_state.player['allycode'],
+                        "user_id": st.session_state.user['user_id'],
+                        "user_name": st.session_state.user['name']
+                    })
+                )
 
             st.success("Игровой аккаунт успешно добавлен!")
             get_player_info(st.session_state.user['user_id']) 
@@ -86,6 +122,24 @@ def join_guild_form():
     if st.button("Вступить в гильдию"):
         try:
             add_player_to_guild(guild_name, guild_role)
+
+            redis_client = get_redis()
+            # Pub/Sub
+            redis_client.publish(
+                "player",
+                json.dumps({
+                    "type": "player_with_guild",
+                    "action": "added",
+                    "player_id": st.session_state.player['player_id'],
+                    "player_name": st.session_state.player['name'],
+                    "guild_name": st.session_state.player['guild_name'],
+                    "guild_id": st.session_state.player['guild_id'],
+                    "guild_role": st.session_state.player['guild_role'],
+                    "allycode": st.session_state.player['allycode'],
+                    "user_id": st.session_state.user['user_id'],
+                    "user_name": st.session_state.user['name']
+                })
+            )
             st.success("Вы успешно вступили в гильдию!")
             get_player_info(st.session_state.user['user_id']) 
         except Exception as e:
@@ -122,6 +176,24 @@ def add_raid_form():
         try:
             execute_query(conn, INSERT_RAID_QUERY,
                           (selected_raid_id, st.session_state.player['guild_id'], start_time, end_time))
+            
+            redis_client = get_redis()
+            # Pub/Sub
+            redis_client.publish(
+                "raid",
+                json.dumps({
+                    "type": "raid_info",
+                    "player_id": st.session_state.player['player_id'],
+                    "player_name": st.session_state.player['name'],
+                    "guild_name": st.session_state.player['guild_name'],
+                    "guild_id": st.session_state.player['guild_id'],
+                    "raid_template_id": selected_raid_id,
+                    "start_time": start_time.isoformat(),
+                    "end_time": end_time.isoformat(),
+                    "action": "added"
+                })
+            )
+
             st.success(f"Рейд '{selected_raid_name}' успешно добавлен!")
         except Exception as e:
             handle_error(e)

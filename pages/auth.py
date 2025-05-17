@@ -7,7 +7,7 @@ from utils.passwords import hash_password, check_password
 
 from database.queries import REGISTER_USER_QUERY, LOGIN_USER_QUERY
 
-from redis_client import get_redis, TOKEN_TTL, SESSION_TTL
+from database.redis_client import get_redis, TOKEN_TTL, SESSION_TTL
 
 def register_page():
     conn = st.session_state.conn

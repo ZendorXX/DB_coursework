@@ -1,7 +1,7 @@
 import streamlit as st
 
 from database.db_config import get_connection
-from redis_client import get_redis, TOKEN_TTL, SESSION_TTL
+from database.redis_client import get_redis, TOKEN_TTL, SESSION_TTL
 
 from pages.home import home_page
 from pages.auth import register_page, login_page, logout_page

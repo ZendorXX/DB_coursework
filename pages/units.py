@@ -1,4 +1,5 @@
 import streamlit as st
+import json
 import csv
 import io
 
@@ -9,6 +10,7 @@ from database.queries import (
     GET_PLAYER_UNITS_QUERY, GET_ALL_UNITS_QUERY, ADD_PLAYER_UNIT_QUERY,
     UPDATE_PLAYER_UNIT_QUERY
 )
+from database.redis_client import get_redis
 
 def import_units_from_file():
     conn = st.session_state.conn
@@ -42,6 +44,20 @@ def import_units_from_file():
 
                 execute_query(conn, ADD_PLAYER_UNIT_QUERY,
                               (st.session_state.player['player_id'], unit_id, level, stars, gear_level, relic_level))
+                
+            redis_client = get_redis()
+            # Pub/Sub
+            redis_client.publish(
+                "units",
+                json.dumps({
+                    "type": "import_csv",
+                    "action": "loaded",
+                    "player_id": st.session_state.player['player_id'],
+                    "player_name": st.session_state.player['name'],
+                    "user_id": st.session_state.user['user_id'],
+                    "user_name": st.session_state.user['name']
+                })
+            )
 
             st.success("Юниты успешно импортированы!")
         except Exception as e:
@@ -76,6 +92,19 @@ def units_page():
         try:
             execute_query(conn, ADD_PLAYER_UNIT_QUERY,
                           (st.session_state.player['player_id'], selected_unit_id, level, stars, gear_level, relic_level))
+            redis_client = get_redis()
+            # Pub/Sub
+            redis_client.publish(
+                "units",
+                json.dumps({
+                    "type": "import_one_unit",
+                    "action": "loaded",
+                    "player_id": st.session_state.player['player_id'],
+                    "player_name": st.session_state.player['name'],
+                    "user_id": st.session_state.user['user_id'],
+                    "user_name": st.session_state.user['name']
+                })
+            )
             st.success(f"Юнит {selected_unit_name} успешно добавлен!")
         except Exception as e:
             handle_error(e)
@@ -102,6 +131,19 @@ def units_page():
                                       (st.session_state.player['player_id'], unit_id, level, stars, gear_level, relic_level))
                     else:
                         st.warning(f"Неверный формат строки: {line}")
+            redis_client = get_redis()
+            # Pub/Sub
+            redis_client.publish(
+                "units",
+                json.dumps({
+                    "type": "import_by_hand",
+                    "action": "loaded",
+                    "player_id": st.session_state.player['player_id'],
+                    "player_name": st.session_state.player['name'],
+                    "user_id": st.session_state.user['user_id'],
+                    "user_name": st.session_state.user['name']
+                })
+            )
             st.success("Юниты успешно импортированы!")
         except Exception as e:
             handle_error(e)
@@ -124,6 +166,19 @@ def units_page():
             try:
                 execute_query(conn, UPDATE_PLAYER_UNIT_QUERY,
                               (new_level, new_stars, new_gear_level, new_relic_level, selected_unit_data['player_unit_id']))
+                redis_client = get_redis()
+                # Pub/Sub
+                redis_client.publish(
+                    "units",
+                    json.dumps({
+                        "type": "unit_edit",
+                        "action": "updated",
+                        "player_id": st.session_state.player['player_id'],
+                        "player_name": st.session_state.player['name'],
+                        "user_id": st.session_state.user['user_id'],
+                        "user_name": st.session_state.user['name']
+                    })
+                )
                 st.success(f"Юнит {selected_unit_data['unit_name']} успешно обновлён!")
             except Exception as e:
                 handle_error(e)

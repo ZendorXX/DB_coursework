@@ -114,7 +114,6 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-
 CREATE TRIGGER update_guild_members_count_trigger
 AFTER INSERT OR DELETE ON Players
 FOR EACH ROW
@@ -146,13 +145,10 @@ BEFORE DELETE ON Users
 FOR EACH ROW
 EXECUTE FUNCTION delete_player_before_user_delete();
 
-
-
 CREATE VIEW PlayerGuildView AS
 SELECT p.player_id, p.name AS player_name, g.name AS guild_name, p.guild_role
 FROM Players p
 LEFT JOIN Guilds g ON p.guild_id = g.guild_id;
-
 
 CREATE OR REPLACE FUNCTION get_guild_total_score(guild_id INT)
 RETURNS INT AS $$
@@ -182,8 +178,6 @@ BEGIN
     VALUES (user_id, name, allycode, galactic_power, guild_id, guild_role);
 END;
 $$;
-
-
 
 CREATE TABLE Sessions (
     session_id SERIAL PRIMARY KEY,

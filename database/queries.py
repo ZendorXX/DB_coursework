@@ -129,7 +129,7 @@ VALUES (%s, %s, %s, %s);
 """
 
 GET_RAIDS_BY_GUILD_ID_QUERY = """
-SELECT r.raid_id, rt.name AS raid_name
+SELECT r.raid_id as raid_id, rt.name as name
 FROM Raids r
 JOIN Raid_Templates rt ON r.raid_template_id = rt.raid_template_id
 WHERE r.guild_id = %s
