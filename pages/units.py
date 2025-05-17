@@ -3,7 +3,7 @@ import json
 import csv
 import io
 
-from utils.db import execute_query, fetch_query
+from utils.db import execute_query, fetch_query, fetch_with_cache
 from utils.error_handling import handle_error
 
 from database.queries import (
@@ -63,54 +63,115 @@ def import_units_from_file():
         except Exception as e:
             handle_error(e)
 
-
-def units_page():
+def view_player_units():
+    """
+    Отображает, кеширует и позволяет редактировать юниты игрока.
+    """
     conn = st.session_state.conn
+    player_id = st.session_state.player['player_id']
+    redis_client = get_redis()
 
-    st.header("Ваши юниты")
+    cache_key = f"player:{player_id}:units"
+    # Кешируем список юнитов игрока
+    units = fetch_with_cache(
+        conn,
+        redis_client,
+        cache_key,
+        GET_PLAYER_UNITS_QUERY,
+        (player_id,)
+    )
 
-    if not st.session_state.player:
-        st.warning("Пожалуйста, добавьте игровой аккаунт.")
-        return
+    st.subheader("Ваши юниты")
+    if units:
+        st.subheader("Ваши юниты")
+        for unit in units:
+            st.write(f"Имя: {unit['unit_name']}, \
+                    Уровень: {unit['level']}, \
+                    Звёзды: {unit['stars']}, \
+                    Снаряжение: {unit['gear_level']}, \
+                    Реликвии: {unit['relic_level']}")
+    else:
+        st.write("У вас пока нет юнитов.")
+    
+    st.subheader("Редактировать юниты")
+    if units:
+        # Формируем опции для selectbox
+        unit_options = {
+            f"{u['unit_name']} (Уровень: {u['level']}, Звёзд: {u['stars']})": u
+            for u in units
+        }
+        selected_label = st.selectbox(
+            "Выберите юнит для редактирования",
+            list(unit_options.keys())
+        )
+        selected = unit_options[selected_label]
 
-    units = fetch_query(conn, GET_ALL_UNITS_QUERY)
-    if not units:
-        st.write("Юниты отсутствуют. Обратитесь к администратору.")
-        return
+        st.write(f"Юнит: {selected['unit_name']} (Тип: {selected['unit_type']})")
 
-    st.subheader("Добавить юнит")
-    unit_options = {unit['name']: unit['unit_id'] for unit in units}
-    selected_unit_name = st.selectbox("Выберите юнит для добавления", list(unit_options.keys()))
-    selected_unit_id = unit_options[selected_unit_name]
-
-    level = st.number_input("Уровень", min_value=1, max_value=85, value=1, key="add_unit_level")
-    stars = st.number_input("Количество звёзд", min_value=1, max_value=7, value=1, key="add_unit_stars")
-    gear_level = st.number_input("Уровень снаряжения", min_value=1, max_value=12, value=1, key="add_unit_gear_level") if units[selected_unit_id - 1]['type'] == 'character' else None
-    relic_level = st.number_input("Уровень реликвий", min_value=0, max_value=8, value=0, key="add_unit_relic_level") if units[selected_unit_id - 1]['type'] == 'character' else None
-
-    if st.button("Добавить юнит"):
-        try:
-            execute_query(conn, ADD_PLAYER_UNIT_QUERY,
-                          (st.session_state.player['player_id'], selected_unit_id, level, stars, gear_level, relic_level))
-            redis_client = get_redis()
-            # Pub/Sub
-            redis_client.publish(
-                "units",
-                json.dumps({
-                    "type": "import_one_unit",
-                    "action": "loaded",
-                    "player_id": st.session_state.player['player_id'],
-                    "player_name": st.session_state.player['name'],
-                    "user_id": st.session_state.user['user_id'],
-                    "user_name": st.session_state.user['name']
-                })
+        # Поля для редактирования
+        new_level = st.number_input(
+            "Уровень",
+            min_value=1,
+            max_value=85,
+            value=selected['level'],
+            key="edit_unit_level"
+        )
+        new_stars = st.number_input(
+            "Количество звёзд",
+            min_value=1,
+            max_value=7,
+            value=selected['stars'],
+            key="edit_unit_stars"
+        )
+        new_gear_level = None
+        new_relic_level = None
+        if selected['unit_type'] == 'character':
+            new_gear_level = st.number_input(
+                "Уровень снаряжения",
+                min_value=1,
+                max_value=12,
+                value=selected['gear_level'],
+                key="edit_unit_gear_level"
             )
-            st.success(f"Юнит {selected_unit_name} успешно добавлен!")
-        except Exception as e:
-            handle_error(e)
+            new_relic_level = st.number_input(
+                "Уровень реликвий",
+                min_value=0,
+                max_value=8,
+                value=selected['relic_level'],
+                key="edit_unit_relic_level"
+            )
 
-    import_units_from_file()
+        if st.button("Сохранить изменения"):
+            try:
+                # Обновляем в БД
+                execute_query(
+                    conn,
+                    UPDATE_PLAYER_UNIT_QUERY,
+                    (new_level, new_stars, new_gear_level, new_relic_level, selected['player_unit_id'])
+                )
+                # Инвалидируем кеш юнитов игрока
+                redis_client.delete(cache_key)
+                # Публикуем событие об изменении
+                redis_client.publish(
+                    "units",
+                    json.dumps({
+                        "type": "unit_edit",
+                        "action": "updated",
+                        "player_id": st.session_state.player['player_id'],
+                        "player_name": st.session_state.player['name'],
+                        "user_id": st.session_state.user['user_id'],
+                        "user_name": st.session_state.user['name'],
+                        "unit_id": selected['player_unit_id']
+                    })
+                )
+                st.success(f"Юнит {selected['unit_name']} успешно обновлён!")
+            except Exception as e:
+                handle_error(e)
+    else:
+        st.write("У вас пока нет юнитов.")
 
+def import_units_manually():
+    conn = st.session_state.conn
     st.subheader("Импорт юнитов вручную")
     st.write("Введите данные юнитов в формате: name,level,stars,gear_level,relic_level (по одному юниту на строку).")
     manual_input = st.text_area("Введите юнитов", height=200)
@@ -148,39 +209,66 @@ def units_page():
         except Exception as e:
             handle_error(e)
 
-    st.subheader("Ваши юниты")
-    player_units = fetch_query(conn, GET_PLAYER_UNITS_QUERY, (st.session_state.player['player_id'],))
-    if player_units:
-        unit_options = {f"{unit['unit_name']} (Уровень: {unit['level']}, Звёзд: {unit['stars']})": unit for unit in player_units}
-        selected_unit = st.selectbox("Выберите юнит для редактирования", list(unit_options.keys()))
-        selected_unit_data = unit_options[selected_unit]
+def add_new_unit():
+    conn = st.session_state.conn
+    st.subheader("Добавить юнит")
 
-        st.write(f"Юнит: {selected_unit_data['unit_name']} (Тип: {selected_unit_data['unit_type']})")
+    units = fetch_query(conn, GET_ALL_UNITS_QUERY)
+    if not units:
+        st.write("Юниты отсутствуют. Обратитесь к администратору.")
+        return
+    
+    unit_options = {unit['name']: unit['unit_id'] for unit in units}
+    selected_unit_name = st.selectbox("Выберите юнит для добавления", list(unit_options.keys()))
+    selected_unit_id = unit_options[selected_unit_name]
 
-        new_level = st.number_input("Уровень", min_value=1, max_value=85, value=selected_unit_data['level'], key="edit_unit_level")
-        new_stars = st.number_input("Количество звёзд", min_value=1, max_value=7, value=selected_unit_data['stars'], key="edit_unit_stars")
-        new_gear_level = st.number_input("Уровень снаряжения", min_value=1, max_value=12, value=selected_unit_data['gear_level'], key="edit_unit_gear_level") if selected_unit_data['unit_type'] == 'character' else None
-        new_relic_level = st.number_input("Уровень реликвий", min_value=0, max_value=8, value=selected_unit_data['relic_level'], key="edit_unit_relic_level") if selected_unit_data['unit_type'] == 'character' else None
+    level = st.number_input("Уровень", min_value=1, max_value=85, value=1, key="add_unit_level")
+    stars = st.number_input("Количество звёзд", min_value=1, max_value=7, value=1, key="add_unit_stars")
+    gear_level = st.number_input("Уровень снаряжения", min_value=1, max_value=12, value=1, key="add_unit_gear_level") if units[selected_unit_id - 1]['type'] == 'character' else None
+    relic_level = st.number_input("Уровень реликвий", min_value=0, max_value=8, value=0, key="add_unit_relic_level") if units[selected_unit_id - 1]['type'] == 'character' else None
 
-        if st.button("Сохранить изменения"):
-            try:
-                execute_query(conn, UPDATE_PLAYER_UNIT_QUERY,
-                              (new_level, new_stars, new_gear_level, new_relic_level, selected_unit_data['player_unit_id']))
-                redis_client = get_redis()
-                # Pub/Sub
-                redis_client.publish(
-                    "units",
-                    json.dumps({
-                        "type": "unit_edit",
-                        "action": "updated",
-                        "player_id": st.session_state.player['player_id'],
-                        "player_name": st.session_state.player['name'],
-                        "user_id": st.session_state.user['user_id'],
-                        "user_name": st.session_state.user['name']
-                    })
-                )
-                st.success(f"Юнит {selected_unit_data['unit_name']} успешно обновлён!")
-            except Exception as e:
-                handle_error(e)
-    else:
-        st.write("У вас пока нет юнитов.")
+    if st.button("Добавить юнит"):
+        try:
+            execute_query(conn, ADD_PLAYER_UNIT_QUERY,
+                          (st.session_state.player['player_id'], selected_unit_id, level, stars, gear_level, relic_level))
+            redis_client = get_redis()
+            # Pub/Sub
+            redis_client.publish(
+                "units",
+                json.dumps({
+                    "type": "import_one_unit",
+                    "action": "loaded",
+                    "player_id": st.session_state.player['player_id'],
+                    "player_name": st.session_state.player['name'],
+                    "user_id": st.session_state.user['user_id'],
+                    "user_name": st.session_state.user['name']
+                })
+            )
+            st.success(f"Юнит {selected_unit_name} успешно добавлен!")
+        except Exception as e:
+            handle_error(e)
+    
+
+def units_page():
+    conn = st.session_state.conn
+
+    st.header("Ваши юниты")
+
+    if not st.session_state.player:
+        st.warning("Пожалуйста, добавьте игровой аккаунт.")
+        return
+
+    st.header("Управление юнитами")
+
+    unit_pages = {
+        "Просмотр юнитов": view_player_units,
+        "Добавить новый юнит": add_new_unit,
+        "Импорт юнитов из файла": import_units_from_file,
+        "Импорт юнитов вручную": import_units_manually
+    }
+    selected_page = st.sidebar.selectbox("Управление юнитами", list(unit_pages.keys()))
+    unit_pages[selected_page]()
+
+    
+
+    
