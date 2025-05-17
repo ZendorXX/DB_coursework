@@ -72,7 +72,6 @@ def view_player_units():
     redis_client = get_redis()
 
     cache_key = f"player:{player_id}:units"
-    # Кешируем список юнитов игрока
     units = fetch_with_cache(
         conn,
         redis_client,
@@ -95,7 +94,6 @@ def view_player_units():
     
     st.subheader("Редактировать юниты")
     if units:
-        # Формируем опции для selectbox
         unit_options = {
             f"{u['unit_name']} (Уровень: {u['level']}, Звёзд: {u['stars']})": u
             for u in units
@@ -108,7 +106,6 @@ def view_player_units():
 
         st.write(f"Юнит: {selected['unit_name']} (Тип: {selected['unit_type']})")
 
-        # Поля для редактирования
         new_level = st.number_input(
             "Уровень",
             min_value=1,
@@ -143,15 +140,14 @@ def view_player_units():
 
         if st.button("Сохранить изменения"):
             try:
-                # Обновляем в БД
                 execute_query(
                     conn,
                     UPDATE_PLAYER_UNIT_QUERY,
                     (new_level, new_stars, new_gear_level, new_relic_level, selected['player_unit_id'])
                 )
-                # Инвалидируем кеш юнитов игрока
+
                 redis_client.delete(cache_key)
-                # Публикуем событие об изменении
+
                 redis_client.publish(
                     "units",
                     json.dumps({

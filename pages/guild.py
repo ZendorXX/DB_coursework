@@ -29,7 +29,6 @@ def guild_page():
 
     st.header(f"Гильдия игрока: {player.get('guild_name', guild_id)}")
 
-    # Кешируем состав гильдии
     members = fetch_with_cache(
         conn,
         redis_client,
@@ -38,20 +37,18 @@ def guild_page():
         (guild_id,)
     )
 
-    # Отображение состава
     st.subheader("Состав гильдии")
     for m in members:
         st.write(f"{m['name']} (Allycode: {m['allycode']}) — Роль: {m['guild_role']}")
 
-    # Проверка прав: только глава (role='leader')
     leader = next((m for m in members if m['allycode'] == player['allycode'] and m['guild_role']=='Глава'), None)
     if not leader:
-        return  # только просмотр
+        return  
 
     st.markdown("---")
     st.subheader("Управление гильдией")
 
-    # Добавление участника
+
     with st.form("add_member_form"):
         new_allycode = st.text_input("Allycode нового участника")
         new_role = st.selectbox("Роль", ["Участник", "Офицер", "Глава"], index=0)
@@ -68,7 +65,6 @@ def guild_page():
         except Exception as e:
             handle_error(e)
 
-    # Удаление или изменение роли существующего
     with st.form("manage_member_form"):
         options = {f"{m['name']} ({m['allycode']}) — {m['guild_role']}": m for m in members}
         sel_label = st.selectbox("Выберите участника", list(options.keys()))

@@ -64,7 +64,6 @@ def main():
     st.title("SWGOH Helper")
     initialize_session_state()
 
-    # Подключение к Redis и загрузка сессии
     redis_client = get_redis()
     token = st.session_state.auth_token
     if token:
@@ -81,13 +80,11 @@ def main():
             for key in ['auth_token','logged_in','user_name','user_id','system_role']:
                 st.session_state.pop(key, None)
 
-    # Запускаем Pub/Sub‑слушатель один раз только для админа
     if st.session_state.system_role == "admin" and "listener_started" not in st.session_state:
         channels = ["player", "raid", "units", "guild"]
         start_listener(channels)
         st.session_state.listener_started = True
 
-    # Блок уведомлений в сайдбаре
     if st.session_state.system_role == "admin":
         with st.sidebar.expander("🔔 Уведомления", expanded=True):
             if "all_msgs" not in st.session_state:

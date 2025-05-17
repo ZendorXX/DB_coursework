@@ -18,7 +18,6 @@ def raids_page():
         st.warning("Пожалуйста, добавьте игровой аккаунт.")
         return
 
-    # Кешируем список типов рейдов
     raid_templates = fetch_with_cache(
         conn,
         redis_client,
@@ -36,7 +35,7 @@ def raids_page():
     selected_raid_id = raid_options[selected_raid_name]
 
     st.subheader(f"Персонажи рейда: {selected_raid_name}")
-    # Кешируем персонажей каждого шаблона рейда
+
     raid_characters = fetch_with_cache(
         conn,
         redis_client,

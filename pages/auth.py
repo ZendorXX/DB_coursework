@@ -41,10 +41,8 @@ def login_page():
                 token = secrets.token_hex(16)
                 redis_client = get_redis()
 
-                # Сохраняем токен авторизации
                 redis_client.setex(f"auth:{token}", TOKEN_TTL, user[0]['user_id'])
 
-                # Сохраняем данные сессии в виде Hash и устанавливаем TTL
                 session_data = {
                     'user_id': user[0]['user_id'],
                     'user_name': user[0]['name'],
@@ -69,7 +67,6 @@ def logout_page():
     if 'auth_token' in st.session_state and st.session_state.auth_token:
         redis_client = get_redis()
         token = st.session_state.auth_token
-        # Удаляем токен авторизации и сессию
         redis_client.delete(f"auth:{token}")
         redis_client.delete(f"session:{token}")
     
